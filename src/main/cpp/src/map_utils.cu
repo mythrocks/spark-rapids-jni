@@ -52,6 +52,9 @@
 #include <thrust/transform_reduce.h>
 
 //
+#include <cuda/functional>
+
+//
 #include <cub/device/device_radix_sort.cuh>
 
 namespace spark_rapids_jni {
@@ -199,9 +202,12 @@ rmm::device_uvector<TreeDepthT> compute_node_levels(int64_t num_nodes,
   };
 
   auto const push_pop_it = thrust::make_transform_iterator(
-    tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> cudf::size_type {
-      return does_push(token) - does_pop(token);
-    });
+    tokens.begin(),
+    cuda::proclaim_return_type<cudf::size_type>(
+        [does_push, does_pop] __device__(PdaTokenT const token) -> cudf::size_type {
+          return does_push(token) - does_pop(token);
+        }
+    ));
   thrust::exclusive_scan(
     rmm::exec_policy(stream), push_pop_it, push_pop_it + tokens.size(), token_levels.begin());
 

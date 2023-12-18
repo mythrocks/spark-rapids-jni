@@ -15,6 +15,7 @@
  */
 
 #include <cooperative_groups.h>
+#include <cuda/functional>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -1705,9 +1706,12 @@ size_type build_tiles(
 
   device_uvector<size_type> tile_starts(num_batches + 1, stream);
   auto tile_iter = cudf::detail::make_counting_transform_iterator(
-    0, [num_tiles = num_tiles.data(), num_batches] __device__(auto i) {
-      return (i < num_batches) ? num_tiles[i] : 0;
-    });
+    0,
+    cuda::proclaim_return_type<cudf::size_type>(
+        [num_tiles = num_tiles.data(), num_batches] __device__(auto i) {
+          return (i < num_batches) ? num_tiles[i] : 0;
+        }
+    ));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          tile_iter,
                          tile_iter + num_batches + 1,
@@ -2459,7 +2463,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const& input,
       auto tmp = [num_rows, col_string_lengths] __device__(auto const& i) {
         return i < num_rows ? col_string_lengths[i] : 0;
       };
-      auto bounded_iter = cudf::detail::make_counting_transform_iterator(0, tmp);
+      auto bounded_iter = cudf::detail::make_counting_transform_iterator(
+                            0, cuda::proclaim_return_type<cudf::size_type>(tmp));
       thrust::exclusive_scan(rmm::exec_policy(stream),
                              bounded_iter,
                              bounded_iter + num_rows + 1,
