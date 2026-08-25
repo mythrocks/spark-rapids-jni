@@ -1394,11 +1394,12 @@ std::pair<std::unique_ptr<cudf::column>, cudf::size_type> floating_point_to_deci
   auto output = cudf::make_fixed_point_column(
     output_type, input.size(), cudf::mask_state::UNALLOCATED, stream, mr);
 
-  auto const decimal_places = -output_type.scale();
-  auto const default_mr     = rmm::mr::get_current_device_resource_ref();
+  auto const decimal_places         = -output_type.scale();
+  auto const default_mr             = rmm::mr::get_current_device_resource_ref();
+  auto const initial_failure_row_id = cudf::size_type{-1};
 
   rmm::device_uvector<bool> validity(input.size(), stream, default_mr);
-  rmm::device_scalar<cudf::size_type> failure_row_id(-1, stream, default_mr);
+  rmm::device_scalar<cudf::size_type> failure_row_id(initial_failure_row_id, stream, default_mr);
 
   cudf::double_type_dispatcher(input.type(),
                                output_type,
