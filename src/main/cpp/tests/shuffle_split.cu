@@ -100,7 +100,7 @@ spark_rapids_jni::shuffle_split_result reshape_partitions(
 
   size_t temp_storage_bytes = 0;
   cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, input_iter, output_iter, size_iter, num_partitions, stream);
+    nullptr, temp_storage_bytes, input_iter, output_iter, size_iter, num_partitions, stream.get());
   rmm::device_buffer temp_storage(
     temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
   cub::DeviceMemcpy::Batched(temp_storage.data(),
@@ -109,7 +109,7 @@ spark_rapids_jni::shuffle_split_result reshape_partitions(
                              output_iter,
                              size_iter,
                              num_partitions,
-                             stream);
+                             stream.get());
 
   return {std::make_unique<rmm::device_buffer>(std::move(remapped_partitions)),
           std::move(remapped_offsets)};

@@ -162,14 +162,14 @@ void pack_bloom_filter_header(cudf::device_span<uint8_t> buf,
                                   byte_swap_int32(header.num_hashes),
                                   byte_swap_int32(header.num_longs)};
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      buf.data(), &raw, bloom_filter_header_v1_size_bytes, cudaMemcpyDefault, stream));
+      buf.data(), &raw, bloom_filter_header_v1_size_bytes, cudaMemcpyDefault, stream.get()));
   } else {
     bloom_filter_header_v2 raw = {byte_swap_int32(header.version),
                                   byte_swap_int32(header.num_hashes),
                                   byte_swap_int32(seed),
                                   byte_swap_int32(header.num_longs)};
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      buf.data(), &raw, bloom_filter_header_v2_size_bytes, cudaMemcpyDefault, stream));
+      buf.data(), &raw, bloom_filter_header_v2_size_bytes, cudaMemcpyDefault, stream.get()));
   }
 }
 
@@ -200,7 +200,7 @@ unpack_bloom_filter(cudf::device_span<uint8_t const> bloom_filter, cuda::stream_
   // TODO (future): Consider using pinned host memory for cudaMemcpyAsync.
   // Refer to https://github.com/NVIDIA/spark-rapids-jni/issues/4407.
   CUDF_CUDA_TRY(
-    cudaMemcpyAsync(raw_ints, bloom_filter.data(), read_size, cudaMemcpyDefault, stream));
+    cudaMemcpyAsync(raw_ints, bloom_filter.data(), read_size, cudaMemcpyDefault, stream.get()));
   stream.sync();
 
   int const version = byte_swap_int32(raw_ints[0]);
@@ -320,8 +320,8 @@ std::unique_ptr<cudf::list_scalar> bloom_filter_create(int version,
                            stream,
                            (version == bloom_filter_version_1 ? 0 : seed));
 
-  CUDF_CUDA_TRY(
-    cudaMemsetAsync(static_cast<uint8_t*>(buf.data()) + hdr_size, 0, bloom_filter_size, stream));
+  CUDF_CUDA_TRY(cudaMemsetAsync(
+    static_cast<uint8_t*>(buf.data()) + hdr_size, 0, bloom_filter_size, stream.get()));
 
   return std::make_unique<cudf::list_scalar>(
     cudf::column(

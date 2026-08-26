@@ -36,7 +36,7 @@ class ProtobufHelpersTest : public cudf::test::BaseFixture {};
 
 TEST_F(ProtobufHelpersTest, NullMaskFromPaddedValidUsesZeroLogicalRows)
 {
-  auto stream = cudf::get_default_stream();
+  cuda::stream_ref stream = cudf::get_default_stream();
 
   std::array<bool, 1> h_valid{false};
   rmm::device_uvector<bool> valid(h_valid.size(), stream);
@@ -56,7 +56,7 @@ TEST_F(ProtobufHelpersTest, NullMaskFromPaddedValidUsesZeroLogicalRows)
 
 TEST_F(ProtobufHelpersTest, NullMaskFromPaddedValidIgnoresTail)
 {
-  auto stream = cudf::get_default_stream();
+  cuda::stream_ref stream = cudf::get_default_stream();
 
   std::array<bool, 3> h_valid{true, false, false};
   rmm::device_uvector<bool> valid(h_valid.size(), stream);
@@ -79,4 +79,24 @@ TEST_F(ProtobufHelpersTest, NullMaskFromPaddedValidIgnoresTail)
 
   EXPECT_TRUE(cudf::bit_is_set(h_mask.data(), 0));
   EXPECT_FALSE(cudf::bit_is_set(h_mask.data(), 1));
+}
+
+TEST_F(ProtobufHelpersTest, NullMaskFromAllValidRowsIsEmpty)
+{
+  cuda::stream_ref stream = cudf::get_default_stream();
+
+  std::array<bool, 2> h_valid{true, true};
+  rmm::device_uvector<bool> valid(h_valid.size(), stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(valid.data(),
+                                h_valid.data(),
+                                h_valid.size() * sizeof(h_valid[0]),
+                                cudaMemcpyDefault,
+                                stream.get()));
+
+  auto [mask, null_count] = spark_rapids_jni::protobuf::detail::make_null_mask_from_valid(
+    valid, h_valid.size(), stream, cudf::get_current_device_resource_ref());
+
+  EXPECT_EQ(0u, mask.size());
+  EXPECT_EQ(nullptr, mask.data());
+  EXPECT_EQ(0, null_count);
 }

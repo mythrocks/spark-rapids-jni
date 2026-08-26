@@ -729,11 +729,16 @@ void split_copy(src_buf_info const* src_bufs,
 
   size_t temp_storage_bytes = 0;  // Initialized on the next line, not that the compiler would know.
   cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, input_iter, output_iter, size_iter, num_bufs, stream);
+    nullptr, temp_storage_bytes, input_iter, output_iter, size_iter, num_bufs, stream.get());
   rmm::device_buffer temp_storage(
     temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
-  cub::DeviceMemcpy::Batched(
-    temp_storage.data(), temp_storage_bytes, input_iter, output_iter, size_iter, num_bufs, stream);
+  cub::DeviceMemcpy::Batched(temp_storage.data(),
+                             temp_storage_bytes,
+                             input_iter,
+                             output_iter,
+                             size_iter,
+                             num_bufs,
+                             stream.get());
 }
 
 /**
@@ -1082,7 +1087,7 @@ shuffle_split_output shuffle_split(cudf::table_view const& input,
                   d_partition_offsets.begin() + num_partitions,
                   sizeof(size_t),
                   cudaMemcpyDefault,
-                  stream);
+                  stream.get());
 
   // generate destination offsets for each of the source copies, by partition, by section.
   auto buf_sizes = spark_rapids_jni::util::make_counting_transform_iterator(

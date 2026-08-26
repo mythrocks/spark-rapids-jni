@@ -223,9 +223,10 @@ decode_result decode_gbk(cudf::column_view const& input,
 
   // Only allocate a device-side flag when the caller actually wants REPORT semantics.
   std::unique_ptr<rmm::device_scalar<int32_t>> flag;
-  int32_t* flag_ptr = nullptr;
+  auto const initial_flag = int32_t{0};
+  int32_t* flag_ptr       = nullptr;
   if (action == error_action::REPORT) {
-    flag     = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+    flag     = std::make_unique<rmm::device_scalar<int32_t>>(initial_flag, stream, mr);
     flag_ptr = flag->data();
   }
 

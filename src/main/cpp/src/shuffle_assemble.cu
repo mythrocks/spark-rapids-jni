@@ -1620,8 +1620,13 @@ void assemble_copy(cudf::device_span<assemble_batch> batches,
         }));
 
     size_t temp_storage_bytes{0};
-    cub::DeviceMemcpy::Batched(
-      nullptr, temp_storage_bytes, input_iter, output_iter, size_iter, batches.size(), stream);
+    cub::DeviceMemcpy::Batched(nullptr,
+                               temp_storage_bytes,
+                               input_iter,
+                               output_iter,
+                               size_iter,
+                               batches.size(),
+                               stream.get());
     rmm::device_buffer temp_storage(
       temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
     cub::DeviceMemcpy::Batched(temp_storage.data(),
@@ -1630,7 +1635,7 @@ void assemble_copy(cudf::device_span<assemble_batch> batches,
                                output_iter,
                                size_iter,
                                batches.size(),
-                               stream);
+                               stream.get());
   }
 
   // copy validity
@@ -1649,7 +1654,7 @@ void assemble_copy(cudf::device_span<assemble_batch> batches,
                   column_info.data(),
                   column_info.size() * sizeof(assemble_column_info),
                   cudaMemcpyDefault,
-                  stream);
+                  stream.get());
   stream.sync();
 }
 
@@ -1712,7 +1717,7 @@ void initialize_empty_buffers(uint8_t* buffer_base, size_t total_size, cuda::str
   // - Validity: all bits 0 (but since num_rows=0, no bits matter)
   // - Offsets: 0 (correct for empty offsets)
   // - Data: 0 (empty data)
-  cudaMemsetAsync(buffer_base, 0, total_size, stream);
+  cudaMemsetAsync(buffer_base, 0, total_size, stream.get());
 }
 
 // create buffer slices for empty columns

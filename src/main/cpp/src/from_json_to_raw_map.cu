@@ -192,7 +192,7 @@ std::tuple<rmm::device_buffer, char, std::unique_ptr<cudf::column>> unify_json_s
                                 concatenated_buff->data(),
                                 concatenated_buff->size(),
                                 cudaMemcpyDefault,
-                                stream));
+                                stream.get()));
   cudf::detail::cuda_memcpy_async(
     cudf::device_span<char>(static_cast<char*>(unified_buff.data()) + concatenated_buff->size(),
                             1u),
