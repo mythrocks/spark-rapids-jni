@@ -26,6 +26,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/stream>
 #include <thrust/tabulate.h>
 
 namespace spark_rapids_jni {

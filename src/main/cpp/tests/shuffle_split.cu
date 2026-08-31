@@ -29,6 +29,7 @@
 
 #include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
+#include <cuda/stream>
 
 struct ShuffleSplitTests : public cudf::test::BaseFixture {};
 

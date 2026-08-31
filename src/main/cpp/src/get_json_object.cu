@@ -41,6 +41,7 @@
 #include <cuda/functional>
 #include <cuda/std/tuple>
 #include <cuda/std/utility>
+#include <cuda/stream>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 

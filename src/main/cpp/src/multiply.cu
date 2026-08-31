@@ -29,6 +29,7 @@
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <cuda/stream>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 

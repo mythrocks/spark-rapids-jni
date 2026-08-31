@@ -34,6 +34,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/stream>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/scan.h>

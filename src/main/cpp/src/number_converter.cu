@@ -27,6 +27,7 @@
 #include <cuda/std/functional>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
+#include <cuda/stream>
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 

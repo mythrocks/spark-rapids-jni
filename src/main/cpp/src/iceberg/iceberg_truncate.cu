@@ -30,6 +30,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/algorithm>
+#include <cuda/stream>
 #include <thrust/tabulate.h>
 
 #include <cstdint>

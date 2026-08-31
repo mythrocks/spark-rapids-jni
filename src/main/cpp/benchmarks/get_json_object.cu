@@ -23,6 +23,8 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/stream>
+
 #include <get_json_object.hpp>
 #include <nvbench/nvbench.cuh>
 

@@ -22,6 +22,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/stream>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 

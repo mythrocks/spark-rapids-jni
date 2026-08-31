@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/stream>
 #include <thrust/transform.h>
 
 namespace spark_rapids_jni {

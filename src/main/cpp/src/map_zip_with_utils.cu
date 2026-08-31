@@ -29,6 +29,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cuda/functional>
+#include <cuda/stream>
 #include <thrust/scan.h>
 
 using namespace cudf;

@@ -35,6 +35,7 @@
 #include <cuda/std/array>
 #include <cuda/std/bit>
 #include <cuda/std/limits>
+#include <cuda/stream>
 #include <thrust/tabulate.h>
 
 #include <cstdint>

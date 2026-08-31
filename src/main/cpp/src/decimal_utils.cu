@@ -33,6 +33,7 @@
 
 #include <cuda/std/cmath>
 #include <cuda/std/functional>
+#include <cuda/stream>
 #include <thrust/tabulate.h>
 
 #include <cmath>

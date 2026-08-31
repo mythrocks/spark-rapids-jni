@@ -33,6 +33,7 @@
 #include <cuda/std/tuple>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
+#include <cuda/stream>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 

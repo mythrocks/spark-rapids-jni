@@ -26,6 +26,7 @@
 #include <rmm/device_scalar.hpp>
 
 #include <cuda/atomic>
+#include <cuda/stream>
 
 #include <stdexcept>
 

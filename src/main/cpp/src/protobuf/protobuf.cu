@@ -23,6 +23,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/stream>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>

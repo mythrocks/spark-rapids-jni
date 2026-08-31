@@ -24,6 +24,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cuda/stream>
+
 namespace spark_rapids_jni {
 
 std::unique_ptr<cudf::column> sort_map_column(cudf::column_view const& input,
