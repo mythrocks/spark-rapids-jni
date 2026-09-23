@@ -22,6 +22,80 @@ import ai.rapids.cudf.Scalar;
 public class Arithmetic {
 
   /**
+   * Computes addition on two ColumnVectors.
+   * If the types of the two vectors do not match, an IllegalArgumentException is
+   * thrown. If the row counts of the two inputs do not match, an
+   * IllegalArgumentException is thrown. If there is any overflow
+   * in ANSI mode, a CudfException is thrown.
+   * Only supports Spark integral data types in ANSI or try mode.
+   *
+   * E.g.:
+   * Integer.MAX_VALUE + 1 = Integer.MIN_VALUE in regular mode.
+   * Integer.MAX_VALUE + 1 = null in try mode.
+   * Integer.MAX_VALUE + 1 = throws exception in ansi mode.
+   *
+   * @param left       left input
+   * @param right      right input
+   * @param isAnsiMode is ANSI mode enabled
+   * @param isTryMode  if true, set null when overflow occurs
+   * @return a new ColumnVector containing the result of adding
+   */
+  public static ColumnVector add(ColumnVector left, ColumnVector right, boolean isAnsiMode,
+      boolean isTryMode) {
+    return new ColumnVector(add(
+        left.getNativeView(), true, right.getNativeView(), true, isAnsiMode,
+        isTryMode));
+  }
+
+  /**
+   * Computes addition on a ColumnVector and a Scalar.
+   * If the types of the two inputs do not match, an IllegalArgumentException is
+   * thrown. If there is any overflow in ANSI mode, a CudfException is thrown.
+   * Only supports Spark integral data types in ANSI or try mode.
+   *
+   * E.g.:
+   * Integer.MAX_VALUE + 1 = Integer.MIN_VALUE in regular mode.
+   * Integer.MAX_VALUE + 1 = null in try mode.
+   * Integer.MAX_VALUE + 1 = throws exception in ansi mode.
+   *
+   * @param left       left input
+   * @param right      right input
+   * @param isAnsiMode is ANSI mode enabled
+   * @param isTryMode  if true, set null when overflow occurs
+   * @return a new ColumnVector containing the result of adding
+   */
+  public static ColumnVector add(ColumnVector left, Scalar right, boolean isAnsiMode,
+      boolean isTryMode) {
+    return new ColumnVector(add(
+        left.getNativeView(), true, right.getScalarHandle(), false, isAnsiMode,
+        isTryMode));
+  }
+
+  /**
+   * Computes addition on a Scalar and a ColumnVector.
+   * If the types of the two inputs do not match, an IllegalArgumentException is
+   * thrown. If there is any overflow in ANSI mode, a CudfException is thrown.
+   * Only supports Spark integral data types in ANSI or try mode.
+   *
+   * E.g.:
+   * Integer.MAX_VALUE + 1 = Integer.MIN_VALUE in regular mode.
+   * Integer.MAX_VALUE + 1 = null in try mode.
+   * Integer.MAX_VALUE + 1 = throws exception in ansi mode.
+   *
+   * @param left       left input
+   * @param right      right input
+   * @param isAnsiMode is ANSI mode enabled
+   * @param isTryMode  if true, set null when overflow occurs
+   * @return a new ColumnVector containing the result of adding
+   */
+  public static ColumnVector add(Scalar left, ColumnVector right, boolean isAnsiMode,
+      boolean isTryMode) {
+    return new ColumnVector(add(
+        left.getScalarHandle(), false, right.getNativeView(), true, isAnsiMode,
+        isTryMode));
+  }
+
+  /**
    * Computes multiplication on two ColumnVectors.
    * If the types of the two vectors do not match, an IllegalArgumentException is
    * thrown. If the row counts of the two inputs do not match, an
@@ -187,6 +261,9 @@ public class Arithmetic {
   }
 
   private static native long multiply(long leftHandle, boolean isLeftCv, long rightHandle,
+      boolean isRightCv, boolean isAnsiMode, boolean isTryMode);
+
+  private static native long add(long leftHandle, boolean isLeftCv, long rightHandle,
       boolean isRightCv, boolean isAnsiMode, boolean isTryMode);
 
   private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod,
