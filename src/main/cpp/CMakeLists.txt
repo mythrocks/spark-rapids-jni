@@ -45,7 +45,7 @@ rapids_cuda_init_architectures(SPARK_RAPIDS_JNI)
 project(
   SPARK_RAPIDS_JNI
   VERSION 26.10.00
-  LANGUAGES CXX CUDA
+  LANGUAGES CXX CUDA ASM
 )
 
 # We use no C++20 modules; disable module scanning so CMake emits no ninja dyndep phase. Otherwise
@@ -169,6 +169,141 @@ get_target_property(CUDF_CUDA_FLAGS cudf::cudf CUDF_CUDA_FLAGS)
 get_target_property(CUDF_CXX_DEFINITIONS cudf::cudf CUDF_CXX_DEFINITIONS)
 get_target_property(CUDF_CUDA_DEFINITIONS cudf::cudf CUDF_CUDA_DEFINITIONS)
 
+# LTO fragments
+if(NOT TARGET xxhash)
+  set(CUDF_EXCLUDE_DEPS_FROM_ALL OFF)
+  include("${CUDF_DIR}/cpp/cmake/thirdparty/get_xxhash.cmake")
+endif()
+if(NOT TARGET zstd)
+  if(NOT TARGET zstd::libzstd_static AND NOT TARGET zstd::libzstd)
+    find_package(zstd REQUIRED)
+  endif()
+  if(TARGET zstd::libzstd_static)
+    add_library(zstd INTERFACE)
+    target_link_libraries(zstd INTERFACE zstd::libzstd_static)
+  elseif(TARGET zstd::libzstd)
+    add_library(zstd INTERFACE)
+    target_link_libraries(zstd INTERFACE zstd::libzstd)
+  endif()
+endif()
+if(NOT COMMAND rtcx_add_embed)
+  if(NOT rtcx_DIR)
+    find_package(rtcx REQUIRED)
+  endif()
+  include("${rtcx_DIR}/embed.cmake")
+endif()
+
+set(SPARK_RAPIDS_JNI_LTO_ARCHITECTURE
+    ""
+    CACHE STRING "CUDA architecture used to compile Spark RAPIDS JNI LTO fragments."
+)
+if(NOT SPARK_RAPIDS_JNI_LTO_ARCHITECTURE)
+  foreach(_definition IN LISTS CUDF_CUDA_DEFINITIONS CUDF_CXX_DEFINITIONS)
+    if(_definition MATCHES "^-?D?CUDF_LTO_ARCHITECTURE=([0-9]+)$")
+      set(SPARK_RAPIDS_JNI_LTO_ARCHITECTURE "${CMAKE_MATCH_1}")
+    endif()
+  endforeach()
+endif()
+if(NOT SPARK_RAPIDS_JNI_LTO_ARCHITECTURE)
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0.0)
+    set(SPARK_RAPIDS_JNI_LTO_ARCHITECTURE 75)
+  else()
+    set(SPARK_RAPIDS_JNI_LTO_ARCHITECTURE 70)
+  endif()
+endif()
+message(VERBOSE
+        "SPARK_RAPIDS_JNI: LTO fragment architecture: ${SPARK_RAPIDS_JNI_LTO_ARCHITECTURE}"
+)
+
+rtcx_add_embed(spark_rapids_jni_fragments)
+
+function(add_spark_rapids_jni_fragment)
+  set(ONE_VALUE_ARGS FRAGMENT SOURCE)
+  set(MULTI_VALUE_ARGS DEFINITIONS)
+  cmake_parse_arguments(ARG "" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
+
+  if(NOT ARG_FRAGMENT)
+    message(FATAL_ERROR "add_spark_rapids_jni_fragment requires FRAGMENT argument")
+  endif()
+  if(NOT ARG_SOURCE)
+    message(FATAL_ERROR "add_spark_rapids_jni_fragment requires SOURCE argument")
+  endif()
+
+  set(OBJECT_ID spark_rapids_jni_fragment_${ARG_FRAGMENT})
+  add_library(${OBJECT_ID} OBJECT ${ARG_SOURCE})
+  target_compile_options(${OBJECT_ID} PRIVATE --compress-mode=size
+                                              "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 13.0.0)
+    target_compile_options(
+      ${OBJECT_ID} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets>"
+    )
+  endif()
+  target_compile_definitions(${OBJECT_ID} PRIVATE CUDF_DISABLE_EXPORTS ${CUDF_CUDA_DEFINITIONS}
+                                                  ${ARG_DEFINITIONS})
+  target_include_directories(
+    ${OBJECT_ID}
+    PRIVATE "${SPARK_RAPIDS_JNI_SOURCE_DIR}/src"
+            "${CUDF_DIR}/cpp/include"
+            "${CUDF_DIR}/cpp/src"
+            "${CUDF_INSTALL_DIR}/include"
+            "${CUDAToolkit_INCLUDE_DIRS}"
+  )
+  target_link_libraries(${OBJECT_ID} PRIVATE cudf::cudf)
+  set_target_properties(
+    ${OBJECT_ID}
+    PROPERTIES CUDA_SEPARABLE_COMPILATION ON
+               CUDA_FATBIN_COMPILATION ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERPROCEDURAL_OPTIMIZATION ON
+               CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED ON
+               CXX_EXTENSIONS ON
+               CXX_VISIBILITY_PRESET hidden
+               CUDA_STANDARD 20
+               CUDA_STANDARD_REQUIRED ON
+               CUDA_VISIBILITY_PRESET hidden
+               CUDA_ARCHITECTURES ${SPARK_RAPIDS_JNI_LTO_ARCHITECTURE}-real
+  )
+
+  rtcx_embed_blob(
+    spark_rapids_jni_fragments FILE $<TARGET_OBJECTS:${OBJECT_ID}> DEST
+    fragments/${ARG_FRAGMENT}.fatbin ID ${ARG_FRAGMENT}
+  )
+endfunction()
+
+foreach(SPARK_RAPIDS_JNI_ADD_TYPE IN ITEMS INT8 INT16 INT32 INT64)
+  string(TOLOWER "${SPARK_RAPIDS_JNI_ADD_TYPE}" SPARK_RAPIDS_JNI_ADD_TYPE_LOWER)
+  add_spark_rapids_jni_fragment(
+    FRAGMENT
+    checked_add_${SPARK_RAPIDS_JNI_ADD_TYPE_LOWER}
+    SOURCE
+    src/fragments/checked_add.cu
+    DEFINITIONS
+    ADD_OVERFLOW_LTO_${SPARK_RAPIDS_JNI_ADD_TYPE}
+  )
+  add_spark_rapids_jni_fragment(
+    FRAGMENT
+    try_add_${SPARK_RAPIDS_JNI_ADD_TYPE_LOWER}
+    SOURCE
+    src/fragments/try_add.cu
+    DEFINITIONS
+    ADD_OVERFLOW_LTO_${SPARK_RAPIDS_JNI_ADD_TYPE}
+  )
+endforeach()
+
+rtcx_embed(
+  spark_rapids_jni_fragments
+  COMPRESSION
+  none
+  OUTPUT_DIRECTORY
+  "${SPARK_RAPIDS_JNI_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+set_source_files_properties(
+  "${spark_rapids_jni_fragments_SOURCE_DIR}/spark_rapids_jni_fragments.s"
+  PROPERTIES GENERATED TRUE
+             LANGUAGE ASM
+)
+
 # cudfjni
 find_library(CUDFJNI_LIB "libcudfjni.a" REQUIRED NO_DEFAULT_PATH
   HINTS "${CUDFJNI_BUILD_DIR}"
@@ -208,6 +343,7 @@ set(CUDFJNI_INCLUDE_DIRS
 
 add_library(
   spark_rapids_jni SHARED
+  "${spark_rapids_jni_fragments_SOURCE_DIR}/spark_rapids_jni_fragments.s"
   # Files starting with uppercase
   src/Aggregation64Utils.cpp
   src/ArithmeticJni.cpp
@@ -245,6 +381,7 @@ add_library(
   src/iceberg/IcebergTruncateJni.cpp
   # Files starting with lowercase
   src/aggregation64_utils.cu
+  src/add.cu
   src/bloom_filter.cu
   src/case_when.cu
   src/cast_decimal_to_string.cu
@@ -325,6 +462,7 @@ target_compile_options(
 target_include_directories(
   spark_rapids_jni
   PRIVATE "${SPARK_RAPIDS_JNI_SOURCE_DIR}/src"
+          "${spark_rapids_jni_fragments_SOURCE_DIR}"
           "${JNI_INCLUDE_DIRS}"
           "${CUDFJNI_INCLUDE_DIRS}"
           "${CUDAToolkit_INCLUDE_DIRS}"
@@ -341,6 +479,8 @@ if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
     spark_rapids_jni PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM  CUDF_USE_PER_THREAD_DEFAULT_STREAM
   )
 endif()
+
+add_dependencies(spark_rapids_jni spark_rapids_jni_fragments)
 
 target_link_libraries(
   spark_rapids_jni PRIVATE

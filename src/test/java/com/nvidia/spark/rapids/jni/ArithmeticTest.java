@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids.jni;
 
 import ai.rapids.cudf.ColumnVector;
+import ai.rapids.cudf.CudfException;
 import ai.rapids.cudf.Scalar;
 
 import org.junit.jupiter.api.Assertions;
@@ -25,6 +26,93 @@ import org.junit.jupiter.api.Test;
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 
 public class ArithmeticTest {
+
+  @Test
+  void addAnsiOffWithOverflow() {
+    // Integer.MAX_VALUE + 1 = Integer.MIN_VALUE in non-ANSI/non-try mode
+    try (
+        ColumnVector left = ColumnVector.fromInts(0, 1, Integer.MAX_VALUE);
+        ColumnVector right = ColumnVector.fromInts(0, 1, 1);
+        ColumnVector expected = ColumnVector.fromInts(0, 2, Integer.MIN_VALUE);
+        ColumnVector actual = Arithmetic.add(left, right, /* isAnsiMode */ false,
+            /* isTryMode */ false)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void addAnsiOnNoOverflow() {
+    try (
+        ColumnVector left = ColumnVector.fromBoxedInts(1, null, -3);
+        ColumnVector right = ColumnVector.fromBoxedInts(10, 1, 3);
+        ColumnVector expected = ColumnVector.fromBoxedInts(11, null, 0);
+        ColumnVector actual = Arithmetic.add(left, right, /* isAnsiMode */ true,
+            /* isTryMode */ false)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void addAnsiOnWithOverflow() {
+    try (
+        ColumnVector left = ColumnVector.fromInts(0, 1, Integer.MAX_VALUE);
+        ColumnVector right = ColumnVector.fromInts(0, 1, 1)) {
+      Assertions.assertThrows(CudfException.class, () -> {
+        try (ColumnVector ignored = Arithmetic.add(left, right, /* isAnsiMode */ true,
+            /* isTryMode */ false)) {
+        }
+      });
+    }
+  }
+
+  @Test
+  void addByteAnsiOnWithOverflow() {
+    try (
+        ColumnVector left = ColumnVector.fromBytes((byte) 0, (byte) 1, Byte.MAX_VALUE);
+        ColumnVector right = ColumnVector.fromBytes((byte) 0, (byte) 1, (byte) 1)) {
+      Assertions.assertThrows(CudfException.class, () -> {
+        try (ColumnVector ignored = Arithmetic.add(left, right, /* isAnsiMode */ true,
+            /* isTryMode */ false)) {
+        }
+      });
+    }
+  }
+
+  @Test
+  void addTryOnWithOverflow() {
+    try (
+        ColumnVector left = ColumnVector.fromBoxedInts(0, null, Integer.MAX_VALUE);
+        ColumnVector right = ColumnVector.fromBoxedInts(1, 1, 1);
+        ColumnVector expected = ColumnVector.fromBoxedInts(1, null, null);
+        ColumnVector actual = Arithmetic.add(left, right, /* isAnsiMode */ false,
+            /* isTryMode */ true)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void addLongScalarTryOnWithOverflow() {
+    try (
+        ColumnVector left = ColumnVector.fromLongs(0, 1, Long.MAX_VALUE);
+        Scalar right = Scalar.fromLong(1);
+        ColumnVector expected = ColumnVector.fromBoxedLongs(1L, 2L, null);
+        ColumnVector actual = Arithmetic.add(left, right, /* isAnsiMode */ false,
+            /* isTryMode */ true)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void addScalarIntAnsiOnNoOverflow() {
+    try (
+        Scalar left = Scalar.fromInt(2);
+        ColumnVector right = ColumnVector.fromBoxedInts(0, null, 3);
+        ColumnVector expected = ColumnVector.fromBoxedInts(2, null, 5);
+        ColumnVector actual = Arithmetic.add(left, right, /* isAnsiMode */ true,
+            /* isTryMode */ false)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
 
   @Test
   void multiplyAnsiOffWithOverflow() {
