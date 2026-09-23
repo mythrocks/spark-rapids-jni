@@ -1,0 +1,58 @@
+diff --git a/target/libcudf/cmake-build/_deps/rtcx-src/cmake/modules/embed/embed.cmake b/target/libcudf/cmake-build/_deps/rtcx-src/cmake/modules/embed/embed.cmake
+index 3a6171d..9837043 100644
+--- a/target/libcudf/cmake-build/_deps/rtcx-src/cmake/modules/embed/embed.cmake
++++ b/target/libcudf/cmake-build/_deps/rtcx-src/cmake/modules/embed/embed.cmake
+@@ -75,6 +75,9 @@ function(rtcx_embed TARGET)
+   if(NOT TARGET xxhash)
+     message(FATAL_ERROR "xxhash target is required for rtcx_embed().")
+   endif()
++  if(NOT TARGET rtcx::rtcx)
++    message(FATAL_ERROR "rtcx::rtcx target is required for rtcx_embed().")
++  endif()
+
+   if(NOT TARGET ${TARGET}__embed_props)
+     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with rtcx_add_embed()")
+@@ -125,11 +128,9 @@ function(rtcx_embed TARGET)
+   file(GENERATE OUTPUT "${EMBED_SCRIPT}" INPUT "${CONFIGURED_EMBED_SCRIPT}")
+
+   set(RUNNER "${TARGET}__jit_embed_run")
+-  add_executable(${RUNNER} EXCLUDE_FROM_ALL
+-                 "${EMBED_SCRIPT}" ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../../src/hash.cpp)
+-  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} xxhash zstd)
+-  target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../../include
+-                                               ${ZSTD_INCLUDE_DIR})
++  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
++  target_link_libraries(${RUNNER} PRIVATE rtcx::rtcx ${CMAKE_DL_LIBS} xxhash zstd)
++  target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
+   set_target_properties(${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
+
+   add_custom_command(OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s
+diff --git a/target/libcudf-install/lib64/cmake/rtcx/embed/embed.cmake b/target/libcudf-install/lib64/cmake/rtcx/embed/embed.cmake
+index 3a6171d..9837043 100644
+--- a/target/libcudf-install/lib64/cmake/rtcx/embed/embed.cmake
++++ b/target/libcudf-install/lib64/cmake/rtcx/embed/embed.cmake
+@@ -75,6 +75,9 @@ function(rtcx_embed TARGET)
+   if(NOT TARGET xxhash)
+     message(FATAL_ERROR "xxhash target is required for rtcx_embed().")
+   endif()
++  if(NOT TARGET rtcx::rtcx)
++    message(FATAL_ERROR "rtcx::rtcx target is required for rtcx_embed().")
++  endif()
+
+   if(NOT TARGET ${TARGET}__embed_props)
+     message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with rtcx_add_embed()")
+@@ -125,11 +128,9 @@ function(rtcx_embed TARGET)
+   file(GENERATE OUTPUT "${EMBED_SCRIPT}" INPUT "${CONFIGURED_EMBED_SCRIPT}")
+
+   set(RUNNER "${TARGET}__jit_embed_run")
+-  add_executable(${RUNNER} EXCLUDE_FROM_ALL
+-                 "${EMBED_SCRIPT}" ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../../src/hash.cpp)
+-  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} xxhash zstd)
+-  target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../../include
+-                                               ${ZSTD_INCLUDE_DIR})
++  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
++  target_link_libraries(${RUNNER} PRIVATE rtcx::rtcx ${CMAKE_DL_LIBS} xxhash zstd)
++  target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
+   set_target_properties(${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
+
+   add_custom_command(OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "add.hpp"
 #include "cudf_jni_apis.hpp"
 #include "exception_with_row_index.hpp"
 #include "jni_utils.hpp"
@@ -23,6 +24,44 @@
 #include <bit>
 
 extern "C" {
+
+JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_Arithmetic_add(JNIEnv* env,
+                                                                        jclass,
+                                                                        jlong left,
+                                                                        jboolean is_left_cv,
+                                                                        jlong right,
+                                                                        jboolean is_right_cv,
+                                                                        jboolean ansi_enabled,
+                                                                        jboolean is_try_mode)
+{
+  JNI_NULL_CHECK(env, left, "left input is null", 0);
+  JNI_NULL_CHECK(env, right, "right input is null", 0);
+
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+
+    if (is_left_cv && is_right_cv) {
+      auto const& left_cv  = *std::bit_cast<cudf::column_view const*>(left);
+      auto const& right_cv = *std::bit_cast<cudf::column_view const*>(right);
+      return cudf::jni::release_as_jlong(
+        spark_rapids_jni::add(left_cv, right_cv, ansi_enabled, is_try_mode));
+    } else if (is_left_cv && !is_right_cv) {
+      auto const& left_cv      = *std::bit_cast<cudf::column_view const*>(left);
+      auto const& right_scalar = *std::bit_cast<cudf::scalar const*>(right);
+      return cudf::jni::release_as_jlong(
+        spark_rapids_jni::add(left_cv, right_scalar, ansi_enabled, is_try_mode));
+    } else if (!is_left_cv && is_right_cv) {
+      auto const& left_scalar = *std::bit_cast<cudf::scalar const*>(left);
+      auto const& right_cv    = *std::bit_cast<cudf::column_view*>(right);
+      return cudf::jni::release_as_jlong(
+        spark_rapids_jni::add(left_scalar, right_cv, ansi_enabled, is_try_mode));
+    } else {
+      throw cudf::logic_error("Unsupported: Both left and right are scalars");
+    }
+  }
+  CATCH_EXCEPTION_WITH_ROW_INDEX(env, 0);
+}
 
 JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_Arithmetic_multiply(JNIEnv* env,
                                                                              jclass,
