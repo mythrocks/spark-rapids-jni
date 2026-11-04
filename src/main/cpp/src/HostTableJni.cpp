@@ -121,6 +121,14 @@ std::size_t host_buffer_size(cudf::table_view const& t, cudaStream_t stream)
     });
 }
 
+// A table ready to be copied to the host: sliced columns materialized once by `unslice`, and the
+// size of host buffer the copy needs. Sizing and copying the same prepared table means a sliced
+// column is materialized once, and the size always matches the copy.
+struct prepared_host_copy {
+  unsliced_table table;
+  std::size_t buffer_size;
+};
+
 uint8_t* copy_to_host_async(
   void const* src, uint8_t* dest, std::size_t size, uint8_t const* dest_end, cudaStream_t stream)
 {
@@ -213,39 +221,62 @@ std::vector<std::unique_ptr<cudf::column_view>> to_device_column_views(
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_bufferSize(JNIEnv* env,
-                                                                              jclass,
-                                                                              jlong table_handle,
-                                                                              jlong jstream)
+JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_prepareCopy(JNIEnv* env,
+                                                                               jclass,
+                                                                               jlong table_handle,
+                                                                               jlong jstream)
 {
   JNI_NULL_CHECK(env, table_handle, "table is null", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto t      = std::bit_cast<cudf::table_view const*>(table_handle);
-    auto stream = std::bit_cast<cudaStream_t>(jstream);
-    return static_cast<jlong>(host_buffer_size(unslice(*t, stream).view, stream));
+    auto t                = std::bit_cast<cudf::table_view const*>(table_handle);
+    auto stream           = std::bit_cast<cudaStream_t>(jstream);
+    auto prepared         = std::make_unique<prepared_host_copy>();
+    prepared->table       = unslice(*t, stream);
+    prepared->buffer_size = host_buffer_size(prepared->table.view, stream);
+    return cudf::jni::release_as_jlong(prepared);
   }
   JNI_CATCH(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_copyFromTableAsync(
-  JNIEnv* env, jclass, jlong table_handle, jlong host_address, jlong host_size, jlong jstream)
+JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_preparedCopySize(
+  JNIEnv* env, jclass, jlong prepared_handle)
 {
-  JNI_NULL_CHECK(env, table_handle, "table is null", 0);
+  JNI_NULL_CHECK(env, prepared_handle, "prepared copy is null", 0);
+  JNI_TRY
+  {
+    auto prepared = std::bit_cast<prepared_host_copy const*>(prepared_handle);
+    return static_cast<jlong>(prepared->buffer_size);
+  }
+  JNI_CATCH(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_copyFromPreparedAsync(
+  JNIEnv* env, jclass, jlong prepared_handle, jlong host_address, jlong host_size, jlong jstream)
+{
+  JNI_NULL_CHECK(env, prepared_handle, "prepared copy is null", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto table       = std::bit_cast<cudf::table_view const*>(table_handle);
-    auto buffer      = std::bit_cast<uint8_t*>(host_address);
-    auto buffer_size = static_cast<std::size_t>(host_size);
-    auto stream      = std::bit_cast<cudaStream_t>(jstream);
-    // The materialized columns of a sliced table are freed on `stream` after the copy is enqueued.
-    auto unsliced        = unslice(*table, stream);
-    auto host_table_view = to_host_table_async(unsliced.view, buffer, buffer_size, stream);
+    auto prepared        = std::bit_cast<prepared_host_copy const*>(prepared_handle);
+    auto buffer          = std::bit_cast<uint8_t*>(host_address);
+    auto buffer_size     = static_cast<std::size_t>(host_size);
+    auto stream          = std::bit_cast<cudaStream_t>(jstream);
+    auto host_table_view = to_host_table_async(prepared->table.view, buffer, buffer_size, stream);
     return std::bit_cast<jlong>(host_table_view.release());
   }
   JNI_CATCH(env, 0);
+}
+
+// Frees the materialized columns on the stream they were created on. Once the host copy has been
+// enqueued on that stream, the memory is not reused until the copy has read it.
+JNIEXPORT void JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_freePreparedCopy(
+  JNIEnv* env, jclass, jlong prepared_handle)
+{
+  JNI_NULL_CHECK(env, prepared_handle, "prepared copy is null", );
+  JNI_TRY { cudf::jni::safe_delete<prepared_host_copy>(prepared_handle); }
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlongArray JNICALL Java_com_nvidia_spark_rapids_jni_HostTable_toDeviceColumnViews(

@@ -44,21 +44,28 @@ public class HostTable implements AutoCloseable {
    * @return host table
    */
   public static HostTable fromTableAsync(Table table, Cuda.Stream stream) {
-    long size = bufferSize(table.getNativeView(), stream.getStream());
-    long tableHandle = 0;
-    HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(size);
+    // Sliced columns are materialized once on the device, and the host buffer is both sized from
+    // and filled from that copy. The copy must be enqueued on the same stream as the preparation,
+    // so that freeing the prepared copy afterwards is ordered after the copy reads it.
+    long preparedHandle = prepareCopy(table.getNativeView(), stream.getStream());
     try {
-      tableHandle = copyFromTableAsync(table.getNativeView(),
-          hostBuffer.getAddress(), hostBuffer.getLength(), stream.getStream());
-    } catch (Throwable t) {
+      long tableHandle;
+      HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(preparedCopySize(preparedHandle));
       try {
-        hostBuffer.close();
-      } catch (Throwable t2) {
-        t.addSuppressed(t2);
+        tableHandle = copyFromPreparedAsync(preparedHandle,
+            hostBuffer.getAddress(), hostBuffer.getLength(), stream.getStream());
+      } catch (Throwable t) {
+        try {
+          hostBuffer.close();
+        } catch (Throwable t2) {
+          t.addSuppressed(t2);
+        }
+        throw t;
       }
-      throw t;
+      return new HostTable(tableHandle, hostBuffer);
+    } finally {
+      freePreparedCopy(preparedHandle);
     }
-    return new HostTable(tableHandle, hostBuffer);
   }
 
   /**
@@ -177,10 +184,14 @@ public class HostTable implements AutoCloseable {
     }
   }
 
-  private static native long bufferSize(long tableHandle, long stream);
+  private static native long prepareCopy(long tableHandle, long stream);
 
-  private static native long copyFromTableAsync(long tableHandle, long hostAddress, long hostSize,
-                                                long stream);
+  private static native long preparedCopySize(long preparedHandle);
+
+  private static native long copyFromPreparedAsync(long preparedHandle, long hostAddress,
+                                                   long hostSize, long stream);
+
+  private static native void freePreparedCopy(long preparedHandle);
 
   private static native long[] toDeviceColumnViews(long tableHandle, long hostToDevPtrOffset);
 
